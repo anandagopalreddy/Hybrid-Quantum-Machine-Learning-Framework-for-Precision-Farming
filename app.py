@@ -1,12 +1,7 @@
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore", category=FutureWarning)
-
-import streamlit as st
-import traceback
-import pathlib
 import os
+import pathlib
 import joblib
+import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,38 +14,38 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import r2_score
 from xgboost import XGBClassifier
 
-# ---------------------------
-# Safe import checks
-# ---------------------------
-st.set_page_config(page_title="🌾 Hybrid ML + Quantum Crop Predictor", layout="wide")
+# ---------------------------------------------------------------------
+# Directory setup
+# ---------------------------------------------------------------------
+MODELS_DIR = pathlib.Path("models")
+MODELS_DIR.mkdir(exist_ok=True)
 
+st.set_page_config(page_title="🌾 Hybrid ML + Quantum Crop Predictor", layout="wide")
+st.title("🌾 Hybrid Quantum–Machine Learning Crop Predictor")
+
+# ---------------------------------------------------------------------
+# Optional Imports
+# ---------------------------------------------------------------------
+quantum_available = False
+qiskit_error = None
 try:
-    import qiskit
+    from qiskit import QuantumCircuit
     from qiskit.quantum_info import Statevector
     from qiskit.circuit.library import ZZFeatureMap
     quantum_available = True
 except Exception as e:
-    quantum_available = False
-    st.warning(f"⚠️ Qiskit unavailable: {e}")
+    qiskit_error = str(e)
 
+statsmodels_available = False
 try:
     import statsmodels.api as sm
     statsmodels_available = True
-except Exception as e:
+except Exception:
     statsmodels_available = False
-    st.warning(f"⚠️ Statsmodels unavailable: {e}")
 
-# ---------------------------
-# Directories and setup
-# ---------------------------
-MODELS_DIR = pathlib.Path("models")
-MODELS_DIR.mkdir(exist_ok=True)
-
-st.title("🌱 Hybrid ML + Quantum Crop Predictor")
-
-# ---------------------------
-# Helper functions
-# ---------------------------
+# ---------------------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------------------
 def ensure_models_dir():
     MODELS_DIR.mkdir(exist_ok=True)
 
@@ -75,9 +70,9 @@ def preprocess_df(df):
         le_map[c] = le
     return df, le_map
 
-# ---------------------------
-# Model training
-# ---------------------------
+# ---------------------------------------------------------------------
+# Training Logic
+# ---------------------------------------------------------------------
 def train_all(df, n_qubits=4, quantum_reps=1, quantum_max_samples=100):
     df = df.copy()
     req_targets = ["yield_in_kg", "saleInRupees"]
@@ -108,7 +103,7 @@ def train_all(df, n_qubits=4, quantum_reps=1, quantum_max_samples=100):
     rf_profit.fit(X_train, y_train_p)
     save_obj(rf_profit, "rf_profit.joblib")
 
-    # Disease classification (if available)
+    # Optional Disease Classifier
     if "Disease" in df_proc.columns:
         Xd = df_proc.drop(columns=req_targets + ["Disease"], errors="ignore")
         yd = df_proc["Disease"]
@@ -117,7 +112,7 @@ def train_all(df, n_qubits=4, quantum_reps=1, quantum_max_samples=100):
         xgb.fit(X_tr, y_tr)
         save_obj(xgb, "xgb_disease.joblib")
 
-    # Optional Quantum feature reduction
+    # Optional Quantum Step
     quantum_info = {"enabled": False}
     if quantum_available:
         try:
@@ -132,16 +127,19 @@ def train_all(df, n_qubits=4, quantum_reps=1, quantum_max_samples=100):
     metrics = {"accuracy": float(r2)}
     save_obj(metrics, "training_metrics.joblib")
 
-    st.session_state["y_true"] = y_test_y
-    st.session_state["y_pred"] = rf_yield.predict(X_test)
-    st.session_state["profit_true"] = y_test_p
-    st.session_state["profit_pred"] = rf_profit.predict(X_test)
+    # Store results in session
+    st.session_state.update({
+        "y_true": y_test_y,
+        "y_pred": rf_yield.predict(X_test),
+        "profit_true": y_test_p,
+        "profit_pred": rf_profit.predict(X_test)
+    })
 
     return metrics, quantum_info
 
-# ---------------------------
-# Predict single input
-# ---------------------------
+# ---------------------------------------------------------------------
+# Prediction Logic
+# ---------------------------------------------------------------------
 def predict_single(input_row):
     le_map = load_obj("label_encoders.joblib")
     row = input_row.copy()
@@ -151,110 +149,113 @@ def predict_single(input_row):
     X_row = pd.DataFrame([row])
     scaler_ml = load_obj("scaler_ml.joblib")
     X_scaled = scaler_ml.transform(X_row.reindex(columns=scaler_ml.feature_names_in_, fill_value=0))
-
     rf_yield = load_obj("rf_yield.joblib")
     rf_profit = load_obj("rf_profit.joblib")
+    return {
+        "final_yield": float(rf_yield.predict(X_scaled)[0]),
+        "final_profit": float(rf_profit.predict(X_scaled)[0])
+    }
 
-    y_pred = float(rf_yield.predict(X_scaled)[0])
-    p_pred = float(rf_profit.predict(X_scaled)[0])
-    return {"final_yield": y_pred, "final_profit": p_pred}
-
-# ---------------------------
+# ---------------------------------------------------------------------
 # Streamlit UI
-# ---------------------------
+# ---------------------------------------------------------------------
 menu = ["Home", "Upload Dataset", "Train Models", "Predict", "Reports", "Models on Disk"]
 choice = st.sidebar.selectbox("Menu", menu)
 
-try:
-    if choice == "Home":
-        st.markdown("""
-        ### 🌾 Hybrid ML + Quantum Crop Predictor
-        - Predicts *crop yield* and *profit* using Random Forests  
-        - Integrates optional *quantum feature reduction* (Qiskit)  
-        - Includes *disease classification* via XGBoost
-        """)
+if choice == "Home":
+    st.markdown("""
+    ### 🌾 Hybrid Quantum–Machine Learning Framework
+    - Predicts **crop yield** and **profitability** using hybrid ML models.  
+    - Integrates **optional quantum feature reduction (Qiskit)**.  
+    - Supports **Statsmodels** for residual analysis.  
+    """)
+    if not quantum_available:
+        st.warning(f"⚠️ Qiskit not loaded. ({qiskit_error})")
+    elif not statsmodels_available:
+        st.warning("⚠️ Statsmodels not installed — residual plots will be limited.")
 
-    elif choice == "Upload Dataset":
-        uploaded = st.file_uploader("📁 Upload CSV Dataset", type=["csv"])
-        if uploaded:
-            df = pd.read_csv(uploaded)
-            st.session_state["dataset"] = df
-            st.success("✅ Dataset uploaded successfully.")
-            st.dataframe(df.head())
+elif choice == "Upload Dataset":
+    uploaded = st.file_uploader("📂 Upload your CSV dataset", type=["csv"])
+    if uploaded:
+        df = pd.read_csv(uploaded)
+        st.session_state["dataset"] = df
+        st.success("✅ Dataset uploaded successfully!")
+        st.dataframe(df.head())
 
-    elif choice == "Train Models":
-        if "dataset" not in st.session_state:
-            st.warning("⚠ Please upload a dataset first.")
-        else:
-            df = st.session_state["dataset"]
-            n_qubits = st.sidebar.number_input("Quantum Qubits", 2, 8, 4)
-            reps = st.sidebar.number_input("Feature Map Reps", 1, 2, 1)
-            max_q_samples = st.sidebar.number_input("Max Quantum Samples", 20, 500, 100)
-            if st.button("🚀 Start Training"):
-                with st.spinner("Training models..."):
-                    metrics, qinfo = train_all(df, n_qubits, reps, max_q_samples)
-                    st.success(f"✅ Training Complete! Accuracy: {metrics['accuracy']:.3f}")
+elif choice == "Train Models":
+    if "dataset" not in st.session_state:
+        st.warning("⚠️ Please upload a dataset first.")
+    else:
+        df = st.session_state["dataset"]
+        n_qubits = st.sidebar.number_input("Quantum qubits", min_value=2, max_value=8, value=4)
+        reps = st.sidebar.number_input("Feature map reps", min_value=1, max_value=2, value=1)
+        max_q_samples = st.sidebar.number_input("Max quantum samples", min_value=20, max_value=500, value=100)
+        if st.button("🚀 Start Training"):
+            with st.spinner("Training in progress..."):
+                metrics, qinfo = train_all(df, n_qubits, reps, max_q_samples)
+                st.success(f"✅ Training Complete! Model Accuracy: {metrics['accuracy']:.3f}")
+                if qinfo["enabled"]:
+                    st.info("🧠 Quantum feature reduction enabled!")
+                elif "error" in qinfo:
+                    st.warning(f"Quantum step skipped: {qinfo['error']}")
 
-    elif choice == "Predict":
-        if not models_exist():
-            st.warning("⚠ Train models first.")
-        else:
-            st.subheader("🔮 Make a Prediction")
-            soil = st.selectbox("Soil Type", ["Loamy", "Clay", "Sandy", "Silty"])
-            season = st.selectbox("Season", ["Kharif", "Rabi", "Zaid"])
-            crop = st.selectbox("Crop", ["Rice", "Wheat", "Maize", "Cotton", "Sugarcane"])
-            rain = st.number_input("Rainfall (mm)", 0.0, 5000.0, 800.0)
-            nutri = st.number_input("Nutrient Level", 0.0, 10.0, 1.2)
-            acres = st.number_input("Number of Acres", 0.1, 100.0, 5.0)
-            fertilizer = st.number_input("Fertilizer Used (kg/acre)", 0.0, 500.0, 50.0)
-            disease = st.selectbox("Disease", ["Healthy", "Blight", "Rust", "Wilt"])
+elif choice == "Predict":
+    if not models_exist():
+        st.warning("⚠ Train models first before predicting.")
+    else:
+        st.subheader("🔮 Crop Prediction Input")
+        soil = st.selectbox("Soil Type", ["Loamy", "Clay", "Sandy", "Silty"])
+        season = st.selectbox("Season", ["Kharif", "Rabi", "Zaid"])
+        crop = st.selectbox("Crop", ["Rice", "Wheat", "Maize", "Cotton", "Sugarcane"])
+        rain = st.number_input("Rainfall (mm)", 0.0, 5000.0, 800.0)
+        nutri = st.number_input("Nutrient Level", 0.0, 10.0, 1.2)
+        acres = st.number_input("Number of Acres", 0.1, 100.0, 5.0)
+        fertilizer = st.number_input("Fertilizer Used (kg/acre)", 0.0, 500.0, 50.0)
+        disease = st.selectbox("Disease", ["Healthy", "Blight", "Rust", "Wilt"])
 
-            input_row = {
-                "soilType": soil, "season": season, "cropName": crop,
-                "rainfall": rain, "nutritions": nutri, "no_of_acres": acres,
-                "fertilizer_used": fertilizer, "Disease": disease
-            }
+        input_row = {
+            "soilType": soil, "season": season, "cropName": crop,
+            "rainfall": rain, "nutritions": nutri, "no_of_acres": acres,
+            "fertilizer_used": fertilizer, "Disease": disease
+        }
 
-            if st.button("🌾 Predict"):
-                with st.spinner("Predicting..."):
-                    out = predict_single(input_row)
-                    st.success("✅ Prediction Complete!")
-                    st.write(f"### 🌾 Predicted Yield: {out['final_yield']:.2f} kg")
-                    st.write(f"### 💰 Predicted Profit: ₹{out['final_profit']:.2f}")
+        if st.button("🌾 Predict"):
+            with st.spinner("Predicting..."):
+                out = predict_single(input_row)
+                st.success("✅ Prediction Complete!")
+                st.write(f"### Predicted Crop Yield: **{out['final_yield']:.2f} kg**")
+                st.write(f"### Predicted Profit: **₹{out['final_profit']:.2f}**")
 
-    elif choice == "Reports":
-        if "y_true" not in st.session_state:
-            st.warning("⚠ Train models to view reports.")
-        else:
-            y_true = st.session_state["y_true"]
-            y_pred = st.session_state["y_pred"]
-            profit_true = st.session_state["profit_true"]
-            profit_pred = st.session_state["profit_pred"]
-            df = st.session_state["dataset"]
+elif choice == "Reports":
+    if "y_true" not in st.session_state:
+        st.warning("⚠ Train a model first to generate reports.")
+    else:
+        df = st.session_state["dataset"]
+        y_true, y_pred = st.session_state["y_true"], st.session_state["y_pred"]
+        profit_true, profit_pred = st.session_state["profit_true"], st.session_state["profit_pred"]
 
-            st.subheader("📊 Model Evaluation")
+        st.subheader("📊 Model Evaluation & Visualizations")
 
-            fig, ax = plt.subplots()
-            sns.scatterplot(x=y_true, y=y_pred, ax=ax, color='green')
-            ax.plot([min(y_true), max(y_true)], [min(y_true), max(y_true)], 'r--')
-            ax.set_title("Actual vs Predicted Crop Yield")
-            st.pyplot(fig)
+        # Yield Distribution
+        fig, ax = plt.subplots()
+        sns.histplot(df["yield_in_kg"], bins=20, kde=True, ax=ax)
+        ax.set_title("Yield Distribution")
+        st.pyplot(fig)
 
-            residuals = y_true - y_pred
-            fig, ax = plt.subplots()
-            sns.residplot(x=y_pred, y=residuals, lowess=True, color='royalblue', ax=ax)
-            ax.set_title("Residual Plot for Yield")
-            st.pyplot(fig)
+        # Residual Plot
+        residuals = y_true - y_pred
+        fig, ax = plt.subplots()
+        sns.residplot(x=y_pred, y=residuals, lowess=statsmodels_available, ax=ax, color='royalblue')
+        ax.set_title("Residual Plot for Crop Yield")
+        st.pyplot(fig)
 
-            fig, ax = plt.subplots()
-            sns.heatmap(df.select_dtypes(include=[np.number]).corr(), annot=True, cmap="coolwarm", ax=ax)
-            ax.set_title("Feature Correlation Heatmap")
-            st.pyplot(fig)
+        # Scatter Plot
+        fig, ax = plt.subplots()
+        sns.scatterplot(x=y_true, y=y_pred, ax=ax, color='green')
+        ax.plot([min(y_true), max(y_true)], [min(y_true), max(y_true)], 'r--', lw=2)
+        ax.set_title("Actual vs Predicted Crop Yield")
+        st.pyplot(fig)
 
-    elif choice == "Models on Disk":
-        st.write("### Saved Models in `./models`")
-        st.write(os.listdir(MODELS_DIR))
-
-except Exception as e:
-    st.error("🚨 Application crashed — error details below:")
-    st.code(traceback.format_exc())
+elif choice == "Models on Disk":
+    st.write("### Saved Models in `./models` Directory")
+    st.write(os.listdir(MODELS_DIR))
