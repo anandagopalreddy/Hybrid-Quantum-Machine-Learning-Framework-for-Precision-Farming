@@ -1,26 +1,13 @@
-# Streamlit App Framework
 streamlit==1.37.1
-
-# Machine Learning
 scikit-learn==1.5.2
 xgboost==2.1.2
-
-# Data Handling
 pandas==2.2.3
 numpy==1.26.4
 joblib==1.4.2
-
-# Visualization
 matplotlib==3.9.2
 seaborn==0.13.2
-
-# Statistical Modeling
 statsmodels==0.14.2
-
-# Quantum Computing
 qiskit==1.2.4
-
-# Streamlit cloud compatibility
 packaging>=23.0
 pillow>=10.3.0
 requests>=2.32.3
