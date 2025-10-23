@@ -2,7 +2,6 @@
 
 ## 🚀 Optimizing Crop Yield and Profitability using Classical ML + Quantum Computing
 
-🔗 **Live Demo:** [https://anandagopalreddy.github.io/Hybrid-Quantum-Machine-Learning-Framework-for-Precision-Farming/]
 
 ---
 
