@@ -1,4 +1,4 @@
-# Core Framework
+# Streamlit App Framework
 streamlit==1.37.1
 
 # Machine Learning
@@ -14,20 +14,14 @@ joblib==1.4.2
 matplotlib==3.9.2
 seaborn==0.13.2
 
-# Optional Statistical Modeling
+# Statistical Modeling
 statsmodels==0.14.2
 
-# Optional Quantum Support
+# Quantum Computing
 qiskit==1.2.4
 
-# Ensure Compatibility
-packaging==24.2
-pillow==10.4.0
-
-# Additional Streamlit Dependencies (auto-required by Cloud)
-protobuf==5.29.5
-altair==5.5.0
-pyarrow==21.0.0
-requests==2.32.5
-tornado==6.5.2
-typing-extensions==4.15.0
+# Streamlit cloud compatibility
+packaging>=23.0
+pillow>=10.3.0
+requests>=2.32.3
+protobuf>=4.25.3
