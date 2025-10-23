@@ -15,25 +15,6 @@ from sklearn.metrics import r2_score
 from xgboost import XGBClassifier
 
 # ---------------------------
-# Optional dependencies
-# ---------------------------
-
-# Qiskit
-try:
-    from qiskit.quantum_info import Statevector
-    from qiskit.circuit.library import ZZFeatureMap
-    quantum_available = True
-except ImportError:
-    quantum_available = False
-
-# statsmodels
-try:
-    import statsmodels.api as sm
-    statsmodels_available = True
-except ImportError:
-    statsmodels_available = False
-
-# ---------------------------
 # Persistence directory
 # ---------------------------
 MODELS_DIR = pathlib.Path("models")
@@ -41,6 +22,26 @@ MODELS_DIR.mkdir(exist_ok=True)
 
 st.set_page_config(page_title="Hybrid ML + Quantum Crop Predictor", layout="wide")
 st.title("🌱 Hybrid ML + Quantum Crop Predictor")
+
+# ---------------------------
+# Optional Qiskit
+# ---------------------------
+quantum_available = True
+try:
+    from qiskit.quantum_info import Statevector
+    from qiskit.circuit.library import ZZFeatureMap
+except Exception as e:
+    quantum_available = False
+    qiskit_import_error = str(e)
+
+# ---------------------------
+# Optional statsmodels
+# ---------------------------
+statsmodels_available = True
+try:
+    import statsmodels.api as sm
+except ImportError:
+    statsmodels_available = False
 
 # ---------------------------
 # Helpers
@@ -113,7 +114,7 @@ def train_all(df, n_qubits=4, quantum_reps=1, quantum_max_samples=100):
         xgb.fit(X_tr, y_tr)
         save_obj(xgb, "xgb_disease.joblib")
 
-    # Quantum PCA (optional)
+    # Quantum (optional)
     quantum_info = {"enabled": False}
     if quantum_available:
         try:
@@ -129,7 +130,7 @@ def train_all(df, n_qubits=4, quantum_reps=1, quantum_max_samples=100):
     metrics = {"accuracy": float(r2)}
     save_obj(metrics, "training_metrics.joblib")
 
-    # Store predictions for reports
+    # Store predictions
     y_pred_yield = rf_yield.predict(X_test)
     y_pred_profit = rf_profit.predict(X_test)
     st.session_state["y_true"] = y_test_y
@@ -169,7 +170,7 @@ if choice == "Home":
     st.markdown("""
     ### Hybrid ML + Quantum Crop Predictor
     - Predicts *crop yield* and *profit* using Random Forests.  
-    - Integrates optional *quantum PCA*.  
+    - Integrates optional *quantum feature reduction*.  
     - Includes *disease classification* via XGBoost.
     """)
 
@@ -193,8 +194,6 @@ elif choice == "Train Models":
             with st.spinner("Training in progress..."):
                 metrics, qinfo = train_all(df, n_qubits=n_qubits, quantum_reps=reps, quantum_max_samples=max_q_samples)
                 st.success(f"Training complete ✅ | Accuracy: {metrics['accuracy']:.3f}")
-                if quantum_available:
-                    st.info(f"Quantum PCA enabled: {qinfo.get('enabled', False)}")
                 st.session_state["trained"] = True
 
 elif choice == "Predict":
