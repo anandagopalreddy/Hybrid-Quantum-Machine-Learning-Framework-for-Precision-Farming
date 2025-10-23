@@ -95,12 +95,6 @@ Developed using **Python, Qiskit, and Streamlit**, this framework empowers farme
 
 ---
 
-## 📜 License
-
-This project is licensed under the **MIT License** — feel free to use, modify, and distribute with proper credit.
-
----
-
 ## ⭐ Show Your Support
 
 If you like this project, please ⭐ **star this repository** and share it with your peers!
