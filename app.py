@@ -1,4 +1,3 @@
-
 import os
 import pathlib
 import joblib
@@ -25,7 +24,7 @@ st.set_page_config(page_title="Hybrid ML + Quantum Crop Predictor", layout="wide
 st.title("🌱 Hybrid ML + Quantum Crop Predictor")
 
 # ---------------------------
-# Try importing Qiskit (optional)
+# Optional Qiskit
 # ---------------------------
 quantum_available = True
 try:
@@ -36,7 +35,7 @@ except Exception as e:
     qiskit_import_error = str(e)
 
 # ---------------------------
-# Try importing statsmodels for lowess
+# Optional statsmodels
 # ---------------------------
 statsmodels_available = True
 try:
@@ -45,7 +44,7 @@ except ImportError:
     statsmodels_available = False
 
 # ---------------------------
-# Utility helpers
+# Helpers
 # ---------------------------
 def ensure_models_dir():
     MODELS_DIR.mkdir(exist_ok=True)
@@ -92,12 +91,12 @@ def train_all(df, n_qubits=4, quantum_reps=1, quantum_max_samples=100):
     X_scaled_ml = scaler_ml.fit_transform(X)
     save_obj(scaler_ml, "scaler_ml.joblib")
 
-    # ✅ Consistent split
+    # Train/test split
     X_train, X_test, y_train_y, y_test_y, y_train_p, y_test_p = train_test_split(
         X_scaled_ml, y_yield, y_profit, test_size=0.2, random_state=42
     )
 
-    # Train Random Forests
+    # Random Forests
     rf_yield = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)
     rf_yield.fit(X_train, y_train_y)
     save_obj(rf_yield, "rf_yield.joblib")
@@ -106,12 +105,11 @@ def train_all(df, n_qubits=4, quantum_reps=1, quantum_max_samples=100):
     rf_profit.fit(X_train, y_train_p)
     save_obj(rf_profit, "rf_profit.joblib")
 
-    # Optional: Disease classifier
+    # Disease classifier
     if "Disease" in df_proc.columns:
         Xd = df_proc.drop(columns=req_targets + ["Disease"], errors="ignore")
         yd = df_proc["Disease"]
         X_tr, X_vl, y_tr, y_vl = train_test_split(Xd, yd, test_size=0.2, random_state=42, stratify=yd)
-        # ✅ Removed deprecated parameter
         xgb = XGBClassifier(eval_metric="mlogloss", random_state=42)
         xgb.fit(X_tr, y_tr)
         save_obj(xgb, "xgb_disease.joblib")
@@ -143,7 +141,7 @@ def train_all(df, n_qubits=4, quantum_reps=1, quantum_max_samples=100):
     return metrics, quantum_info
 
 # ---------------------------
-# Predict single input
+# Predict single row
 # ---------------------------
 def predict_single(input_row):
     le_map = load_obj("label_encoders.joblib")
@@ -168,9 +166,6 @@ def predict_single(input_row):
 menu = ["Home", "Upload Dataset", "Train Models", "Predict", "Reports", "Models on Disk"]
 choice = st.sidebar.selectbox("Menu", menu)
 
-# ---------------------------
-# Home Page
-# ---------------------------
 if choice == "Home":
     st.markdown("""
     ### Hybrid ML + Quantum Crop Predictor
@@ -179,9 +174,6 @@ if choice == "Home":
     - Includes *disease classification* via XGBoost.
     """)
 
-# ---------------------------
-# Upload Dataset
-# ---------------------------
 elif choice == "Upload Dataset":
     uploaded = st.file_uploader("Upload CSV Dataset", type=["csv"])
     if uploaded:
@@ -190,9 +182,6 @@ elif choice == "Upload Dataset":
         st.success("✅ Dataset uploaded successfully and stored in session.")
         st.dataframe(df.head())
 
-# ---------------------------
-# Train Models
-# ---------------------------
 elif choice == "Train Models":
     if "dataset" not in st.session_state:
         st.warning("⚠ Please upload a dataset first.")
@@ -207,9 +196,6 @@ elif choice == "Train Models":
                 st.success(f"Training complete ✅ | Accuracy: {metrics['accuracy']:.3f}")
                 st.session_state["trained"] = True
 
-# ---------------------------
-# Predict Page
-# ---------------------------
 elif choice == "Predict":
     if not models_exist():
         st.warning("⚠ Train models first before predicting.")
@@ -237,9 +223,6 @@ elif choice == "Predict":
                 st.write(f"### *Predicted Crop Yield:* {out['final_yield']:.2f} kg")
                 st.write(f"### *Predicted Profit:* ₹{out['final_profit']:.2f}")
 
-# ---------------------------
-# Reports Section
-# ---------------------------
 elif choice == "Reports":
     if "y_true" not in st.session_state or "y_pred" not in st.session_state:
         st.warning("⚠ Train the model first to generate reports.")
@@ -283,7 +266,7 @@ elif choice == "Reports":
         ax.set_title("Actual vs Predicted Crop Yield")
         st.pyplot(fig)
 
-        # Box Plot of Residuals
+        # Box Plot Residuals
         fig, ax = plt.subplots()
         sns.boxplot(x=residuals, ax=ax, color='lightcoral')
         ax.set_title("Box Plot of Residuals")
@@ -298,7 +281,6 @@ elif choice == "Reports":
             ax.set_title("Actual vs Predicted Profit")
             st.pyplot(fig)
 
-            # ✅ Fixed ticklabels warning
             fig, ax = plt.subplots()
             sns.boxplot(data=[profit_true, profit_pred], ax=ax)
             ax.set_xticks([0, 1])
@@ -313,9 +295,6 @@ elif choice == "Reports":
             ax3.set_title("Feature Correlation Heatmap")
             st.pyplot(fig3)
 
-# ---------------------------
-# Models on Disk
-# ---------------------------
 elif choice == "Models on Disk":
     st.write("### Saved Models in ./models Folder")
     st.write(os.listdir(MODELS_DIR))
